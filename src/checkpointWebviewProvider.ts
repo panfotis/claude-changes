@@ -22,6 +22,9 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
   ) {}
 
   refresh(): void {
+    if (this._revertedFiles.size > 500) {
+      this._revertedFiles.clear();
+    }
     if (this._view) {
       this._updateContent(this._view.webview);
     }
@@ -142,7 +145,7 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
     font-size: var(--vscode-font-size);
     color: var(--vscode-foreground);
     background: transparent;
-    padding: 0 4px 8px 4px;
+    padding: 0 5px 10px 5px;
     line-height: 1.4;
   }
 
@@ -181,8 +184,8 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
 
   /* ── Session Card ── */
   .session {
-    margin-bottom: 12px;
-    border-radius: 6px;
+    margin-bottom: 14px;
+    border-radius: 8px;
     background: var(--vscode-sideBar-background);
     border: 1px solid var(--vscode-panel-border, transparent);
     overflow: hidden;
@@ -191,8 +194,8 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
   .session-header {
     display: flex;
     align-items: flex-start;
-    gap: 8px;
-    padding: 10px 12px;
+    gap: 10px;
+    padding: 11px 12px 10px 12px;
     cursor: pointer;
     user-select: none;
     transition: background 0.15s;
@@ -219,8 +222,8 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 12.5px;
+    font-weight: 650;
     color: var(--vscode-foreground);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -243,25 +246,26 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
   .session-meta {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-top: 3px;
+    gap: 7px;
+    margin-top: 4px;
     font-size: 11px;
     color: var(--vscode-descriptionForeground);
+    flex-wrap: wrap;
   }
 
   .badge {
     display: inline-flex;
     align-items: center;
     gap: 3px;
-    padding: 1px 6px;
-    border-radius: 9px;
-    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    font-size: 10.5px;
     font-weight: 500;
-    background: color-mix(in srgb, var(--vscode-foreground) 12%, transparent);
-    color: var(--vscode-descriptionForeground);
+    background: color-mix(in srgb, var(--vscode-foreground) 10%, transparent);
+    color: color-mix(in srgb, var(--vscode-descriptionForeground) 92%, var(--vscode-foreground) 8%);
   }
   .badge.files {
-    background: color-mix(in srgb, var(--vscode-gitDecoration-addedResourceForeground, #73c991) 20%, transparent);
+    background: color-mix(in srgb, var(--vscode-gitDecoration-addedResourceForeground, #73c991) 16%, transparent);
     color: var(--vscode-gitDecoration-addedResourceForeground, #73c991);
   }
 
@@ -294,20 +298,20 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
 
   /* ── Timeline Toggle ── */
   .timeline-toggle {
-    margin: 4px 6px 6px 6px;
+    margin: 6px 6px 7px 6px;
   }
 
   .timeline-toggle-header {
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 5px 8px;
+    padding: 6px 9px;
     cursor: pointer;
     user-select: none;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--vscode-descriptionForeground);
+    border-radius: 6px;
+    font-size: 11.5px;
+    font-weight: 550;
+    color: color-mix(in srgb, var(--vscode-descriptionForeground) 88%, var(--vscode-foreground) 12%);
     transition: background 0.1s;
   }
   .timeline-toggle-header:hover {
@@ -337,17 +341,18 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
 
   /* ── Timeline ── */
   .timeline {
-    padding: 8px 12px 10px 12px;
+    padding: 10px 12px 12px 12px;
     margin: 0 6px 6px 6px;
     position: relative;
     background: color-mix(in srgb, var(--vscode-foreground) 5%, transparent);
-    border-radius: 5px;
+    border-radius: 7px;
+    border: 1px solid color-mix(in srgb, var(--vscode-foreground) 7%, transparent);
   }
 
   .checkpoint {
     position: relative;
-    padding-left: 22px;
-    padding-bottom: 6px;
+    padding-left: 24px;
+    padding-bottom: 8px;
   }
   .checkpoint:last-child { padding-bottom: 0; }
 
@@ -355,12 +360,12 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
   .checkpoint::before {
     content: '';
     position: absolute;
-    left: 5px;
-    top: 16px;
-    bottom: -2px;
+    left: 6px;
+    top: 18px;
+    bottom: -3px;
     width: 1px;
     background: var(--vscode-gitDecoration-addedResourceForeground, #73c991);
-    opacity: 0.3;
+    opacity: 0.25;
   }
   .checkpoint:last-child::before { display: none; }
 
@@ -370,8 +375,8 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
     position: absolute;
     left: 2px;
     top: 8px;
-    width: 8px;
-    height: 8px;
+    width: 9px;
+    height: 9px;
     border-radius: 50%;
     background: var(--vscode-gitDecoration-addedResourceForeground, #73c991);
     z-index: 1;
@@ -383,9 +388,9 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
     gap: 6px;
     cursor: pointer;
     user-select: none;
-    padding: 3px 6px;
-    margin-left: -6px;
-    border-radius: 4px;
+    padding: 5px 8px;
+    margin-left: -8px;
+    border-radius: 6px;
     transition: background 0.1s;
   }
   .checkpoint-header:hover {
@@ -393,8 +398,8 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
   }
 
   .checkpoint-time {
-    font-size: 11px;
-    font-weight: 600;
+    font-size: 11.5px;
+    font-weight: 650;
     color: var(--vscode-foreground);
     transition: color 0.15s;
   }
@@ -404,9 +409,9 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
 
   .checkpoint-count {
     font-size: 10px;
-    padding: 0 5px;
-    border-radius: 8px;
-    background: color-mix(in srgb, var(--vscode-gitDecoration-addedResourceForeground, #73c991) 20%, transparent);
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--vscode-gitDecoration-addedResourceForeground, #73c991) 16%, transparent);
     color: var(--vscode-gitDecoration-addedResourceForeground, #73c991);
   }
 
@@ -425,7 +430,10 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
     overflow: hidden;
     transition: max-height 0.25s ease, opacity 0.15s ease;
     opacity: 1;
-    margin-top: 2px;
+    margin-top: 3px;
+    margin-left: 3px;
+    padding-left: 8px;
+    border-left: 1px solid color-mix(in srgb, var(--vscode-foreground) 12%, transparent);
   }
   .checkpoint.collapsed .checkpoint-files {
     max-height: 0;
@@ -434,14 +442,16 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
 
   /* ── File Items ── */
   .file-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 3px 6px;
-    border-radius: 4px;
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
     cursor: pointer;
     transition: background 0.1s;
     font-size: 12px;
+    margin-bottom: 1px;
   }
   .file-item:hover {
     background: var(--vscode-list-hoverBackground);
@@ -467,15 +477,22 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
   }
 
   .file-icon {
-    flex-shrink: 0;
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 10px;
     font-weight: 700;
     border-radius: 3px;
+    margin-top: 1px;
+  }
+
+  .file-main {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
   }
   .file-icon.added {
     color: var(--vscode-gitDecoration-addedResourceForeground, #73c991);
@@ -488,26 +505,46 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
   }
 
   .file-name {
-    flex: 1;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--vscode-foreground);
+    font-weight: 500;
+    line-height: 1.25;
   }
   .file-path {
+    display: block;
     font-size: 10px;
-    color: var(--vscode-descriptionForeground);
+    color: color-mix(in srgb, var(--vscode-descriptionForeground) 90%, var(--vscode-foreground) 10%);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 120px;
+    max-width: 100%;
+    line-height: 1.2;
+  }
+
+  .file-side {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    justify-self: end;
+    min-width: 0;
   }
 
   .file-actions {
     display: flex;
-    gap: 2px;
+    gap: 3px;
     flex-shrink: 0;
+    align-self: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+  }
+  .file-item:hover .file-actions,
+  .file-item:focus-within .file-actions {
+    opacity: 0.95;
+    pointer-events: auto;
   }
 
   .action-btn {
@@ -518,7 +555,7 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
     padding: 2px 4px;
     border-radius: 3px;
     font-size: 12px;
-    opacity: 0.6;
+    opacity: 0.7;
     transition: opacity 0.1s, background 0.1s;
   }
   .action-btn:hover {
@@ -797,6 +834,8 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
     const title = this._escapeHtml(
       session.firstUserMessage || session.slug || session.sessionId.slice(0, 8)
     );
+    const fullTitle =
+      session.firstUserMessage || session.slug || session.sessionId;
     const collapsed = index > 0 ? " collapsed" : "";
 
     // Cumulative changes: all unique files, first backup per file.
@@ -849,7 +888,7 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
             <path d="M5.7 13.7L5 13l4.6-4.6L5 3.7l.7-.7 5.3 5.3-5.3 5.4z"/>
           </svg>
           <div class="session-info">
-            <div class="session-title"><span class="session-dot"></span>${title}</div>
+            <div class="session-title" title="${this._escapeAttr(fullTitle)}"><span class="session-dot"></span>${title}</div>
             <div class="session-meta">
               <span class="relative-time">${this._relativeTime(date)}</span>
               <span>${dateStr}, ${timeStr}</span>
@@ -861,14 +900,14 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
           </div>
         </div>
         <div class="session-body">
-          <div class="timeline-toggle" data-session-id="${this._escapeAttr(session.sessionId)}" data-toggle-id="all-changes">
+          <div class="timeline-toggle collapsed" data-session-id="${this._escapeAttr(session.sessionId)}" data-toggle-id="all-changes">
             <div class="timeline-toggle-header">
               <svg class="timeline-toggle-chevron" viewBox="0 0 16 16" fill="currentColor">
                 <path d="M5.7 13.7L5 13l4.6-4.6L5 3.7l.7-.7 5.3 5.3-5.3 5.4z"/>
               </svg>
               <span>All Changes</span>
               <span class="badge files">${netChangedCount} file${netChangedCount !== 1 ? "s" : ""}</span>
-              <button class="revert-all-btn" data-session-id="${session.sessionId}" title="Revert all files to before this session">&#x21A9; Revert All</button>
+              <button class="revert-all-btn" data-session-id="${this._escapeAttr(session.sessionId)}" title="Revert all files to before this session">&#x21A9; Revert All</button>
             </div>
             <div class="timeline-toggle-body">
               <div class="cumulative-files">
@@ -876,7 +915,7 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
               </div>
             </div>
           </div>
-          <div class="timeline-toggle collapsed" data-session-id="${this._escapeAttr(session.sessionId)}" data-toggle-id="timeline">
+          <div class="timeline-toggle" data-session-id="${this._escapeAttr(session.sessionId)}" data-toggle-id="timeline">
             <div class="timeline-toggle-header">
               <svg class="timeline-toggle-chevron" viewBox="0 0 16 16" fill="currentColor">
                 <path d="M5.7 13.7L5 13l4.6-4.6L5 3.7l.7-.7 5.3 5.3-5.3 5.4z"/>
@@ -1015,6 +1054,9 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
       ? findNextBackup(session, snapshot.messageId, f.filePath)
       : null;
     const dirName = path.dirname(f.filePath);
+    const displayPath = dirName && dirName !== "."
+      ? this._truncateMiddle(dirName, 42)
+      : "";
     const fileExists = fs.existsSync(f.absolutePath);
     const isNew = f.backupFileName === null;
     const isDeleted = !isNew && !fileExists;
@@ -1040,16 +1082,17 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
       }
     }
 
-    const actionBtn = isReverted
+    const revertedBadge = isReverted
       ? `<span class="reverted-badge">reverted</span>`
-      : isNew
-        ? `<button class="action-btn delete-btn" title="Delete (file created by Claude)">&#x1F5D1;</button>`
-        : `<button class="action-btn restore-btn" title="Restore">&#x21A9;</button>`;
+      : "";
+    const actionBtn = isNew
+      ? `<button class="action-btn delete-btn" title="Delete (file created by Claude)">&#x1F5D1;</button>`
+      : `<button class="action-btn restore-btn" title="Restore">&#x21A9;</button>`;
     const revertedClass = isReverted ? " reverted" : "";
 
     return `
       <div class="file-item${revertedClass}"
-        data-session-id="${session.sessionId}"
+        data-session-id="${this._escapeAttr(session.sessionId)}"
         data-file-path="${this._escapeAttr(f.filePath)}"
         data-absolute-path="${this._escapeAttr(f.absolutePath)}"
         data-backup-file-name="${this._escapeAttr(f.backupFileName ?? "")}"
@@ -1058,10 +1101,15 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
         data-mode="${mode}"
         data-next-backup-file-name="${this._escapeAttr(nextBackup ?? "")}">
         <span class="file-icon ${iconClass}">${iconChar}</span>
-        <span class="file-name">${this._escapeHtml(fileName)}</span>
-        ${dirName && dirName !== "." ? `<span class="file-path">${this._escapeHtml(dirName)}</span>` : ""}
-        <div class="file-actions">
-          ${actionBtn}
+        <div class="file-main">
+          <span class="file-name">${this._escapeHtml(fileName)}</span>
+          ${displayPath ? `<span class="file-path" title="${this._escapeAttr(dirName)}">${this._escapeHtml(displayPath)}</span>` : ""}
+        </div>
+        <div class="file-side">
+          ${revertedBadge}
+          <div class="file-actions">
+            ${isReverted ? "" : actionBtn}
+          </div>
         </div>
       </div>`;
   }
@@ -1100,6 +1148,17 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
 
   private _escapeAttr(text: string): string {
     return text.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+  }
+
+  private _truncateMiddle(text: string, maxLength: number): string {
+    if (text.length <= maxLength || maxLength < 8) {
+      return text;
+    }
+
+    const visible = maxLength - 3;
+    const left = Math.ceil(visible / 2);
+    const right = Math.floor(visible / 2);
+    return `${text.slice(0, left)}...${text.slice(-right)}`;
   }
 
   private _revertedKey(sessionId: string, absolutePath: string): string {

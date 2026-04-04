@@ -2,7 +2,8 @@ import * as vscode from "vscode";
 import { readBackupFile } from "./checkpointService";
 
 /**
- * URI scheme: claude-checkpoint:///<sessionId>/<backupFileName>?label=<displayLabel>
+ * URI scheme: claude-checkpoint:///<sessionId>/<backupFileName>/<fileNameHint>
+ * The optional filename hint preserves extension so VS Code can infer language mode.
  */
 export const SCHEME = "claude-checkpoint";
 
@@ -18,8 +19,11 @@ export class SnapshotContentProvider
       return "";
     }
 
-    const sessionId = parts[0];
-    const backupFileName = parts[1];
+    const sessionId = decodeURIComponent(parts[0]);
+    if (sessionId === "empty") {
+      return "";
+    }
+    const backupFileName = decodeURIComponent(parts[1]);
 
     const content = readBackupFile(sessionId, backupFileName);
     return content ?? "";
@@ -32,9 +36,12 @@ export class SnapshotContentProvider
 export function buildCheckpointUri(
   sessionId: string,
   backupFileName: string,
-  displayLabel: string
+  fileNameHint: string
 ): vscode.Uri {
+  const safeHint = (fileNameHint || "file.txt").replace(/[\\/]/g, "_");
   return vscode.Uri.parse(
-    `${SCHEME}:///${sessionId}/${backupFileName}`
-  ).with({ query: displayLabel });
+    `${SCHEME}:///${encodeURIComponent(sessionId)}/${encodeURIComponent(
+      backupFileName
+    )}/${encodeURIComponent(safeHint)}`
+  );
 }

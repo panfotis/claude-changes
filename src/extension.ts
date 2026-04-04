@@ -126,7 +126,7 @@ export function activate(context: vscode.ExtensionContext) {
             const nextUri = buildCheckpointUri(
               sessionId,
               nextBackupFileName,
-              `${fileName} @ next`
+              fileName
             );
             const nextLabel =
               nextVersion !== null ? `v${nextVersion}` : "next checkpoint";
@@ -161,7 +161,7 @@ export function activate(context: vscode.ExtensionContext) {
         const checkpointUri = buildCheckpointUri(
           sessionId,
           backupFileName,
-          `${fileName} @ checkpoint`
+          fileName
         );
 
         // Timeline mode: diff checkpoint vs next checkpoint (or current if last)
@@ -169,7 +169,7 @@ export function activate(context: vscode.ExtensionContext) {
           const nextUri = buildCheckpointUri(
             sessionId,
             nextBackupFileName,
-            `${fileName} @ next`
+            fileName
           );
           const nextLabel =
             nextVersion !== null ? `v${nextVersion}` : "next checkpoint";
