@@ -12,6 +12,14 @@ import { readBackupFile, findSessionsForWorkspace, getCumulativeChanges } from "
 
 const log = vscode.window.createOutputChannel("Claude Changes");
 
+function parseBackupVersion(backupFileName: string | null | undefined): number | null {
+  if (!backupFileName) {
+    return null;
+  }
+  const match = backupFileName.match(/@v(\d+)$/);
+  return match ? parseInt(match[1], 10) : null;
+}
+
 export function activate(context: vscode.ExtensionContext) {
   const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   log.appendLine(`Workspace path: ${workspacePath ?? "NONE"}`);
@@ -96,9 +104,11 @@ export function activate(context: vscode.ExtensionContext) {
         absolutePath: string,
         backupFileName: string | null,
         version: number,
-        backupTime: string
+        backupTime: string,
+        mode?: string,
+        nextBackupFileName?: string | null
       ) => {
-        log.appendLine(`viewDiffData: session=${sessionId}, absolutePath=${absolutePath}, backup=${backupFileName}, version=${version}`);
+        log.appendLine(`viewDiffData: session=${sessionId}, absolutePath=${absolutePath}, backup=${backupFileName}, version=${version}, mode=${mode}, next=${nextBackupFileName}`);
         const fileName = path.basename(absolutePath);
         const date = new Date(backupTime);
         const timeLabel = date.toLocaleTimeString([], {
@@ -106,16 +116,39 @@ export function activate(context: vscode.ExtensionContext) {
           minute: "2-digit",
           second: "2-digit",
         });
+        const emptyUri = vscode.Uri.parse(`${SCHEME}:///empty/empty`);
+        const nextVersion = parseBackupVersion(nextBackupFileName);
 
         if (!backupFileName) {
-          // Newly created file
-          const currentUri = vscode.Uri.file(absolutePath);
-          if (fs.existsSync(absolutePath)) {
+          // Newly created file.
+          // In checkpoint mode, prefer empty -> next checkpoint backup.
+          if (mode === "checkpoint" && nextBackupFileName) {
+            const nextUri = buildCheckpointUri(
+              sessionId,
+              nextBackupFileName,
+              `${fileName} @ next`
+            );
+            const nextLabel =
+              nextVersion !== null ? `v${nextVersion}` : "next checkpoint";
             await vscode.commands.executeCommand(
               "vscode.diff",
-              vscode.Uri.parse(`${SCHEME}:///empty/empty`),
+              emptyUri,
+              nextUri,
+              `${fileName}: created at ${timeLabel} \u2194 ${nextLabel}`
+            );
+            return;
+          }
+
+          const currentUri = vscode.Uri.file(absolutePath);
+          if (fs.existsSync(absolutePath)) {
+            const label = mode === "checkpoint"
+              ? `${fileName}: created at ${timeLabel} \u2194 current (may include later edits)`
+              : `${fileName} (new file at ${timeLabel})`;
+            await vscode.commands.executeCommand(
+              "vscode.diff",
+              emptyUri,
               currentUri,
-              `${fileName} (new file at ${timeLabel})`
+              label
             );
           } else {
             vscode.window.showInformationMessage(
@@ -130,18 +163,45 @@ export function activate(context: vscode.ExtensionContext) {
           backupFileName,
           `${fileName} @ checkpoint`
         );
+
+        // Timeline mode: diff checkpoint vs next checkpoint (or current if last)
+        if (mode === "checkpoint" && nextBackupFileName) {
+          const nextUri = buildCheckpointUri(
+            sessionId,
+            nextBackupFileName,
+            `${fileName} @ next`
+          );
+          const nextLabel =
+            nextVersion !== null ? `v${nextVersion}` : "next checkpoint";
+          await vscode.commands.executeCommand(
+            "vscode.diff",
+            checkpointUri,
+            nextUri,
+            `${fileName}: v${version} (${timeLabel}) \u2194 ${nextLabel}`
+          );
+          return;
+        }
+
+        // Cumulative mode or last checkpoint: diff vs current file
         const currentUri = vscode.Uri.file(absolutePath);
 
         if (fs.existsSync(absolutePath)) {
+          const label = mode === "checkpoint"
+            ? `${fileName}: v${version} (${timeLabel}) \u2194 current (may include later edits)`
+            : `${fileName}: checkpoint v${version} (${timeLabel}) \u2194 current`;
           await vscode.commands.executeCommand(
             "vscode.diff",
             checkpointUri,
             currentUri,
-            `${fileName}: checkpoint v${version} (${timeLabel}) \u2194 current`
+            label
           );
         } else {
-          const doc = await vscode.workspace.openTextDocument(checkpointUri);
-          await vscode.window.showTextDocument(doc, { preview: true });
+          await vscode.commands.executeCommand(
+            "vscode.diff",
+            checkpointUri,
+            emptyUri,
+            `${fileName}: checkpoint v${version} (${timeLabel}) \u2192 deleted`
+          );
         }
       }
     )
@@ -159,9 +219,10 @@ export function activate(context: vscode.ExtensionContext) {
       ) => {
         if (!backupFileName) {
           // File was created by Claude — offer to delete it
-          vscode.commands.executeCommand(
+          await vscode.commands.executeCommand(
             "claudeChanges.deleteFileData",
-            absolutePath
+            absolutePath,
+            sessionId
           );
           return;
         }
@@ -190,7 +251,7 @@ export function activate(context: vscode.ExtensionContext) {
             fs.mkdirSync(dir, { recursive: true });
           }
           fs.writeFileSync(absolutePath, content, "utf-8");
-          webviewProvider.markFileReverted(absolutePath);
+          webviewProvider.markFileReverted(sessionId, absolutePath);
           vscode.window.showInformationMessage(
             `Restored ${path.basename(absolutePath)} to checkpoint v${version}`
           );
@@ -206,7 +267,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand(
       "claudeChanges.deleteFileData",
-      async (absolutePath: string) => {
+      async (absolutePath: string, sessionId?: string) => {
         log.appendLine(`deleteFileData called: ${absolutePath}`);
         const fileName = path.basename(absolutePath);
 
@@ -229,7 +290,9 @@ export function activate(context: vscode.ExtensionContext) {
 
         try {
           fs.unlinkSync(absolutePath);
-          webviewProvider.markFileReverted(absolutePath);
+          if (sessionId) {
+            webviewProvider.markFileReverted(sessionId, absolutePath);
+          }
           const dir = path.dirname(absolutePath);
           const isEmpty = fs.readdirSync(dir).length === 0;
           const msg = isEmpty
@@ -293,6 +356,7 @@ export function activate(context: vscode.ExtensionContext) {
         let restored = 0;
         let deleted = 0;
         let failed = 0;
+        const revertedPaths: string[] = [];
 
         for (const file of modified) {
           const content = readBackupFile(session.sessionId, file.backupFileName!);
@@ -307,6 +371,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
             fs.writeFileSync(file.absolutePath, content, "utf-8");
             restored++;
+            revertedPaths.push(file.absolutePath);
           } catch {
             failed++;
           }
@@ -316,20 +381,23 @@ export function activate(context: vscode.ExtensionContext) {
           try {
             fs.unlinkSync(file.absolutePath);
             deleted++;
+            revertedPaths.push(file.absolutePath);
           } catch {
             failed++;
           }
         }
 
-        const allPaths = [...modified, ...created].map((f) => f.absolutePath);
-        webviewProvider.markAllReverted(sessionId, allPaths);
+        if (revertedPaths.length > 0) {
+          webviewProvider.markAllReverted(sessionId, revertedPaths);
+        }
 
         const msgParts: string[] = [];
         if (restored > 0) { msgParts.push(`${restored} restored`); }
         if (deleted > 0) { msgParts.push(`${deleted} deleted`); }
         const msg = msgParts.join(", ");
         if (failed > 0) {
-          vscode.window.showWarningMessage(`${msg}, ${failed} failed.`);
+          const warningPrefix = msg ? `${msg}, ` : "";
+          vscode.window.showWarningMessage(`${warningPrefix}${failed} failed.`);
         } else {
           vscode.window.showInformationMessage(`Reverted: ${msg}.`);
         }

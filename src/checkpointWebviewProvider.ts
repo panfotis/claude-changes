@@ -8,6 +8,7 @@ import {
   findSessionsForWorkspace,
   getCumulativeChanges,
   readBackupFile,
+  findNextBackup,
 } from "./checkpointService";
 
 export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
@@ -26,21 +27,23 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  markFileReverted(absolutePath: string): void {
-    this._revertedFiles.add(absolutePath);
+  markFileReverted(sessionId: string, absolutePath: string): void {
+    this._revertedFiles.add(this._revertedKey(sessionId, absolutePath));
     this._view?.webview.postMessage({
       command: "markReverted",
+      sessionId,
       absolutePath,
     });
   }
 
   markAllReverted(sessionId: string, absolutePaths: string[]): void {
     for (const p of absolutePaths) {
-      this._revertedFiles.add(p);
+      this._revertedFiles.add(this._revertedKey(sessionId, p));
     }
     this._view?.webview.postMessage({
       command: "markAllReverted",
       sessionId,
+      absolutePaths,
     });
   }
 
@@ -65,7 +68,9 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
             message.absolutePath,
             message.backupFileName,
             message.version,
-            message.backupTime
+            message.backupTime,
+            message.mode,
+            message.nextBackupFileName
           );
           break;
         case "restoreFile":
@@ -86,7 +91,8 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
         case "deleteFile":
           vscode.commands.executeCommand(
             "claudeChanges.deleteFileData",
-            message.absolutePath
+            message.absolutePath,
+            message.sessionId
           );
           break;
       }
@@ -477,6 +483,9 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
   .file-icon.modified {
     color: var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d);
   }
+  .file-icon.deleted {
+    color: var(--vscode-gitDecoration-deletedResourceForeground, #f14c4c);
+  }
 
   .file-name {
     flex: 1;
@@ -556,40 +565,134 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
   ${sessionsHtml}
   <script>
     const vscode = acquireVsCodeApi();
+    const persistedState = vscode.getState() || {};
+    const uiState = {
+      sessions: persistedState.sessions || {},
+      toggles: persistedState.toggles || {},
+      checkpoints: persistedState.checkpoints || {},
+    };
+
+    function toggleKey(el) {
+      const sessionId = el.dataset.sessionId || '';
+      const toggleId = el.dataset.toggleId || '';
+      return sessionId && toggleId ? sessionId + '::' + toggleId : '';
+    }
+
+    function persistUiState() {
+      vscode.setState(uiState);
+    }
+
+    function rememberSession(el) {
+      const sessionId = el?.dataset?.sessionId;
+      if (sessionId) {
+        uiState.sessions[sessionId] = el.classList.contains('collapsed');
+      }
+    }
+
+    function rememberToggle(el) {
+      const key = toggleKey(el);
+      if (key) {
+        uiState.toggles[key] = el.classList.contains('collapsed');
+      }
+    }
+
+    function rememberCheckpoint(el) {
+      const checkpointId = el?.dataset?.checkpointId;
+      if (checkpointId) {
+        uiState.checkpoints[checkpointId] = el.classList.contains('collapsed');
+      }
+    }
+
+    function applyUiState() {
+      document.querySelectorAll('.session').forEach(el => {
+        const sessionId = el.dataset.sessionId;
+        if (!sessionId) return;
+        const collapsed = uiState.sessions[sessionId];
+        if (collapsed === true) el.classList.add('collapsed');
+        if (collapsed === false) el.classList.remove('collapsed');
+      });
+
+      document.querySelectorAll('.timeline-toggle').forEach(el => {
+        const key = toggleKey(el);
+        if (!key) return;
+        const collapsed = uiState.toggles[key];
+        if (collapsed === true) el.classList.add('collapsed');
+        if (collapsed === false) el.classList.remove('collapsed');
+      });
+
+      document.querySelectorAll('.checkpoint').forEach(el => {
+        const checkpointId = el.dataset.checkpointId;
+        if (!checkpointId) return;
+        const collapsed = uiState.checkpoints[checkpointId];
+        if (collapsed === true) el.classList.add('collapsed');
+        if (collapsed === false) el.classList.remove('collapsed');
+      });
+    }
+
+    applyUiState();
 
     // Session toggle
     document.querySelectorAll('.session-header').forEach(el => {
       el.addEventListener('click', () => {
-        el.closest('.session').classList.toggle('collapsed');
+        const session = el.closest('.session');
+        session.classList.toggle('collapsed');
+        rememberSession(session);
+        persistUiState();
       });
     });
 
     // Checkpoint toggle
     document.querySelectorAll('.checkpoint-header').forEach(el => {
       el.addEventListener('click', () => {
-        el.closest('.checkpoint').classList.toggle('collapsed');
+        const checkpoint = el.closest('.checkpoint');
+        checkpoint.classList.toggle('collapsed');
+        rememberCheckpoint(checkpoint);
+        persistUiState();
       });
     });
 
     // Timeline toggle
     document.querySelectorAll('.timeline-toggle-header').forEach(el => {
       el.addEventListener('click', () => {
-        el.closest('.timeline-toggle').classList.toggle('collapsed');
+        const toggle = el.closest('.timeline-toggle');
+        toggle.classList.toggle('collapsed');
+        rememberToggle(toggle);
+        persistUiState();
       });
     });
 
     // Expand all
     document.getElementById('expandAll').addEventListener('click', () => {
-      document.querySelectorAll('.session.collapsed').forEach(el => el.classList.remove('collapsed'));
-      document.querySelectorAll('.timeline-toggle.collapsed').forEach(el => el.classList.remove('collapsed'));
-      document.querySelectorAll('.checkpoint.collapsed').forEach(el => el.classList.remove('collapsed'));
+      document.querySelectorAll('.session.collapsed').forEach(el => {
+        el.classList.remove('collapsed');
+        rememberSession(el);
+      });
+      document.querySelectorAll('.timeline-toggle.collapsed').forEach(el => {
+        el.classList.remove('collapsed');
+        rememberToggle(el);
+      });
+      document.querySelectorAll('.checkpoint.collapsed').forEach(el => {
+        el.classList.remove('collapsed');
+        rememberCheckpoint(el);
+      });
+      persistUiState();
     });
 
     // Collapse all
     document.getElementById('collapseAll').addEventListener('click', () => {
-      document.querySelectorAll('.session:not(.collapsed)').forEach(el => el.classList.add('collapsed'));
-      document.querySelectorAll('.timeline-toggle:not(.collapsed)').forEach(el => el.classList.add('collapsed'));
-      document.querySelectorAll('.checkpoint:not(.collapsed)').forEach(el => el.classList.add('collapsed'));
+      document.querySelectorAll('.session:not(.collapsed)').forEach(el => {
+        el.classList.add('collapsed');
+        rememberSession(el);
+      });
+      document.querySelectorAll('.timeline-toggle:not(.collapsed)').forEach(el => {
+        el.classList.add('collapsed');
+        rememberToggle(el);
+      });
+      document.querySelectorAll('.checkpoint:not(.collapsed)').forEach(el => {
+        el.classList.add('collapsed');
+        rememberCheckpoint(el);
+      });
+      persistUiState();
     });
 
     // File click -> diff
@@ -603,7 +706,9 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
           absolutePath: el.dataset.absolutePath,
           backupFileName: el.dataset.backupFileName || null,
           version: parseInt(el.dataset.version),
-          backupTime: el.dataset.backupTime
+          backupTime: el.dataset.backupTime,
+          mode: el.dataset.mode,
+          nextBackupFileName: el.dataset.nextBackupFileName || null
         });
       });
     });
@@ -628,7 +733,8 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
         const fi = el.closest('.file-item');
         vscode.postMessage({
           command: 'deleteFile',
-          absolutePath: fi.dataset.absolutePath
+          absolutePath: fi.dataset.absolutePath,
+          sessionId: fi.dataset.sessionId
         });
       });
     });
@@ -648,7 +754,9 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
       const msg = event.data;
       if (msg.command === 'markReverted') {
         document.querySelectorAll('.file-item').forEach(el => {
-          if (el.dataset.absolutePath === msg.absolutePath && !el.classList.contains('reverted')) {
+          const sameSession = el.dataset.sessionId === msg.sessionId;
+          const samePath = el.dataset.absolutePath === msg.absolutePath;
+          if (sameSession && samePath && !el.classList.contains('reverted')) {
             el.classList.add('reverted');
             const actions = el.querySelector('.file-actions');
             if (actions) {
@@ -658,8 +766,11 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
         });
       }
       if (msg.command === 'markAllReverted') {
+        const revertedPaths = new Set(msg.absolutePaths || []);
         document.querySelectorAll('.file-item').forEach(el => {
-          if (el.closest('.session')?.querySelector('[data-session-id="' + msg.sessionId + '"]') && !el.classList.contains('reverted')) {
+          const sameSession = el.dataset.sessionId === msg.sessionId;
+          const samePath = revertedPaths.size === 0 || revertedPaths.has(el.dataset.absolutePath);
+          if (sameSession && samePath && !el.classList.contains('reverted')) {
             el.classList.add('reverted');
             const actions = el.querySelector('.file-actions');
             if (actions) {
@@ -686,28 +797,53 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
     const title = this._escapeHtml(
       session.firstUserMessage || session.slug || session.sessionId.slice(0, 8)
     );
-    const totalFiles = new Set(
-      session.snapshots.flatMap((s) => s.files.map((f) => f.filePath))
-    ).size;
-
     const collapsed = index > 0 ? " collapsed" : "";
 
-    // Cumulative changes: all unique files, first backup per file
-    const cumulativeFiles = getCumulativeChanges(session);
+    // Cumulative changes: all unique files, first backup per file.
+    // Hide entries that would produce an empty diff.
+    const cumulativeFiles = getCumulativeChanges(session).filter((f) =>
+      this._hasCumulativeDiff(session, f)
+    );
+    const netChangedCount = cumulativeFiles.length;
     const cumulativeHtml = cumulativeFiles
       .map((f) => this._renderFileItem(session, f, "cumulative"))
       .join("");
 
-    // Timeline checkpoints
-    const checkpointsHtml = [...session.snapshots]
+    // Timeline checkpoints: hide files/checkpoints that would produce empty diffs.
+    const timelineCheckpoints = session.snapshots
+      .map((snap, originalIndex) => ({
+        snap,
+        originalIndex,
+        files: snap.files.filter((f) => this._hasTimelineDiff(session, snap, f)),
+      }))
+      .filter((entry) => entry.files.length > 0);
+    const totalCheckpointCount = session.snapshots.length;
+    const timelineCheckpointCount = timelineCheckpoints.length;
+    const hiddenCheckpointCount = totalCheckpointCount - timelineCheckpointCount;
+    const timelineCountLabel =
+      timelineCheckpointCount === totalCheckpointCount
+        ? `${timelineCheckpointCount} checkpoint${timelineCheckpointCount !== 1 ? "s" : ""}`
+        : `${timelineCheckpointCount} shown / ${totalCheckpointCount} total`;
+    const hiddenCheckpointTooltip =
+      hiddenCheckpointCount > 0
+        ? ` title="${this._escapeAttr(
+            `${hiddenCheckpointCount} checkpoint${hiddenCheckpointCount !== 1 ? "s are" : " is"} hidden because they have no actual diff`
+          )}"`
+        : "";
+    const checkpointsHtml = [...timelineCheckpoints]
       .reverse()
-      .map((snap, i) =>
-        this._renderCheckpoint(session, snap, session.snapshots.length - 1 - i)
+      .map((entry) =>
+        this._renderCheckpoint(
+          session,
+          entry.snap,
+          entry.originalIndex,
+          entry.files
+        )
       )
       .join("");
 
     return `
-      <div class="session${collapsed}">
+      <div class="session${collapsed}" data-session-id="${this._escapeAttr(session.sessionId)}">
         <div class="session-header">
           <svg class="session-chevron" viewBox="0 0 16 16" fill="currentColor">
             <path d="M5.7 13.7L5 13l4.6-4.6L5 3.7l.7-.7 5.3 5.3-5.3 5.4z"/>
@@ -719,19 +855,19 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
               <span>${dateStr}, ${timeStr}</span>
             </div>
             <div class="session-meta">
-              <span class="badge">${session.snapshots.length} checkpoint${session.snapshots.length !== 1 ? "s" : ""}</span>
-              <span class="badge files">${totalFiles} file${totalFiles !== 1 ? "s" : ""}</span>
+              <span class="badge"${hiddenCheckpointTooltip}>${timelineCountLabel}</span>
+              <span class="badge files">${netChangedCount} file${netChangedCount !== 1 ? "s" : ""}</span>
             </div>
           </div>
         </div>
         <div class="session-body">
-          <div class="timeline-toggle">
+          <div class="timeline-toggle" data-session-id="${this._escapeAttr(session.sessionId)}" data-toggle-id="all-changes">
             <div class="timeline-toggle-header">
               <svg class="timeline-toggle-chevron" viewBox="0 0 16 16" fill="currentColor">
                 <path d="M5.7 13.7L5 13l4.6-4.6L5 3.7l.7-.7 5.3 5.3-5.3 5.4z"/>
               </svg>
               <span>All Changes</span>
-              <span class="badge files">${totalFiles} file${totalFiles !== 1 ? "s" : ""}</span>
+              <span class="badge files">${netChangedCount} file${netChangedCount !== 1 ? "s" : ""}</span>
               <button class="revert-all-btn" data-session-id="${session.sessionId}" title="Revert all files to before this session">&#x21A9; Revert All</button>
             </div>
             <div class="timeline-toggle-body">
@@ -740,13 +876,13 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
               </div>
             </div>
           </div>
-          <div class="timeline-toggle collapsed">
+          <div class="timeline-toggle collapsed" data-session-id="${this._escapeAttr(session.sessionId)}" data-toggle-id="timeline">
             <div class="timeline-toggle-header">
               <svg class="timeline-toggle-chevron" viewBox="0 0 16 16" fill="currentColor">
                 <path d="M5.7 13.7L5 13l4.6-4.6L5 3.7l.7-.7 5.3 5.3-5.3 5.4z"/>
               </svg>
               <span>Timeline</span>
-              <span class="badge">${session.snapshots.length} checkpoint${session.snapshots.length !== 1 ? "s" : ""}</span>
+              <span class="badge"${hiddenCheckpointTooltip}>${timelineCountLabel}</span>
             </div>
             <div class="timeline-toggle-body">
               <div class="timeline">
@@ -761,27 +897,29 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
   private _renderCheckpoint(
     session: SessionInfo,
     snapshot: Snapshot,
-    index: number
+    index: number,
+    files: FileBackup[]
   ): string {
     const date = new Date(snapshot.timestamp);
+    const checkpointId = `${session.sessionId}::${snapshot.messageId}`;
     const timeStr = date.toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
     });
 
-    const filesHtml = snapshot.files
-      .map((f) => this._renderFileItem(session, f, "checkpoint"))
+    const filesHtml = files
+      .map((f) => this._renderFileItem(session, f, "checkpoint", snapshot))
       .join("");
 
     return `
-      <div class="checkpoint collapsed">
+      <div class="checkpoint collapsed" data-checkpoint-id="${this._escapeAttr(checkpointId)}">
         <div class="checkpoint-header">
           <svg class="checkpoint-chevron" viewBox="0 0 16 16" fill="currentColor">
             <path d="M5.7 13.7L5 13l4.6-4.6L5 3.7l.7-.7 5.3 5.3-5.3 5.4z"/>
           </svg>
           <span class="checkpoint-time">#${index + 1} &middot; ${timeStr}</span>
-          <span class="checkpoint-count">${snapshot.files.length} file${snapshot.files.length !== 1 ? "s" : ""}</span>
+          <span class="checkpoint-count">${files.length} file${files.length !== 1 ? "s" : ""}</span>
         </div>
         <div class="checkpoint-files">
           ${filesHtml}
@@ -789,31 +927,115 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
       </div>`;
   }
 
+  private _hasCumulativeDiff(session: SessionInfo, file: FileBackup): boolean {
+    if (file.backupFileName === null) {
+      // New file: compare empty -> current.
+      if (!fs.existsSync(file.absolutePath)) {
+        return false;
+      }
+      try {
+        return fs.readFileSync(file.absolutePath, "utf-8") !== "";
+      } catch {
+        return true;
+      }
+    }
+
+    try {
+      const backup = readBackupFile(session.sessionId, file.backupFileName);
+      if (backup === null) {
+        return true;
+      }
+      if (!fs.existsSync(file.absolutePath)) {
+        // Diff is backup -> empty
+        return backup !== "";
+      }
+      const current = fs.readFileSync(file.absolutePath, "utf-8");
+      return backup !== current;
+    } catch {
+      return true;
+    }
+  }
+
+  private _hasTimelineDiff(
+    session: SessionInfo,
+    snapshot: Snapshot,
+    file: FileBackup
+  ): boolean {
+    const nextBackup = findNextBackup(session, snapshot.messageId, file.filePath);
+
+    if (file.backupFileName === null) {
+      // Created file:
+      // - with next backup: empty -> next backup
+      // - otherwise: empty -> current (or empty if missing)
+      if (nextBackup) {
+        const nextContent = readBackupFile(session.sessionId, nextBackup);
+        return nextContent === null ? true : nextContent !== "";
+      }
+      if (!fs.existsSync(file.absolutePath)) {
+        return false;
+      }
+      try {
+        return fs.readFileSync(file.absolutePath, "utf-8") !== "";
+      } catch {
+        return true;
+      }
+    }
+
+    const backup = readBackupFile(session.sessionId, file.backupFileName);
+    if (backup === null) {
+      return true;
+    }
+
+    if (nextBackup) {
+      // Checkpoint mode: backup -> next backup
+      const nextContent = readBackupFile(session.sessionId, nextBackup);
+      return nextContent === null ? true : backup !== nextContent;
+    }
+
+    // Last occurrence: backup -> current (or empty if missing)
+    if (!fs.existsSync(file.absolutePath)) {
+      return backup !== "";
+    }
+    try {
+      const current = fs.readFileSync(file.absolutePath, "utf-8");
+      return backup !== current;
+    } catch {
+      return true;
+    }
+  }
+
   private _renderFileItem(
     session: SessionInfo,
     f: FileBackup,
-    mode: "cumulative" | "checkpoint"
+    mode: "cumulative" | "checkpoint",
+    snapshot?: Snapshot
   ): string {
     const fileName = path.basename(f.absolutePath);
+    const nextBackup = mode === "checkpoint" && snapshot
+      ? findNextBackup(session, snapshot.messageId, f.filePath)
+      : null;
     const dirName = path.dirname(f.filePath);
+    const fileExists = fs.existsSync(f.absolutePath);
     const isNew = f.backupFileName === null;
-    const iconClass = isNew ? "added" : "modified";
-    const iconChar = isNew ? "A" : "M";
-    let isReverted = this._revertedFiles.has(f.absolutePath);
-    if (!isReverted) {
+    const isDeleted = !isNew && !fileExists;
+    const iconClass = isNew ? "added" : isDeleted ? "deleted" : "modified";
+    const iconChar = isNew ? "A" : isDeleted ? "D" : "M";
+    const revertedKey = this._revertedKey(session.sessionId, f.absolutePath);
+
+    // Only show reverted if user explicitly clicked revert, validated against current state
+    let isReverted = false;
+    if (this._revertedFiles.has(revertedKey)) {
       if (isNew) {
-        // Created file: reverted if it no longer exists
-        isReverted = !fs.existsSync(f.absolutePath);
+        isReverted = !fileExists;
       } else {
-        // Modified file: reverted if backup matches current file
         try {
           const backup = readBackupFile(session.sessionId, f.backupFileName!);
-          const current = fs.existsSync(f.absolutePath)
+          const current = fileExists
             ? fs.readFileSync(f.absolutePath, "utf-8")
             : null;
           isReverted = backup !== null && backup === current;
         } catch {
-          // On error, assume not reverted
+          isReverted = false;
         }
       }
     }
@@ -832,8 +1054,9 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
         data-absolute-path="${this._escapeAttr(f.absolutePath)}"
         data-backup-file-name="${this._escapeAttr(f.backupFileName ?? "")}"
         data-version="${f.version}"
-        data-backup-time="${f.backupTime}"
-        data-mode="${mode}">
+        data-backup-time="${this._escapeAttr(f.backupTime)}"
+        data-mode="${mode}"
+        data-next-backup-file-name="${this._escapeAttr(nextBackup ?? "")}">
         <span class="file-icon ${iconClass}">${iconChar}</span>
         <span class="file-name">${this._escapeHtml(fileName)}</span>
         ${dirName && dirName !== "." ? `<span class="file-path">${this._escapeHtml(dirName)}</span>` : ""}
@@ -877,5 +1100,9 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
 
   private _escapeAttr(text: string): string {
     return text.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+  }
+
+  private _revertedKey(sessionId: string, absolutePath: string): string {
+    return `${sessionId}::${absolutePath}`;
   }
 }

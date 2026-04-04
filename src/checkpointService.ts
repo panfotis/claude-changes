@@ -344,6 +344,34 @@ export function getCumulativeChanges(session: SessionInfo): FileBackup[] {
 }
 
 /**
+ * Find the next backup filename for a file after a given snapshot in a session.
+ * Returns the backup filename from the next snapshot that contains this file,
+ * or null if this is the last occurrence.
+ */
+export function findNextBackup(
+  session: SessionInfo,
+  snapshotMessageId: string,
+  filePath: string
+): string | null {
+  let foundCurrent = false;
+
+  for (const snap of session.snapshots) {
+    if (snap.messageId === snapshotMessageId) {
+      foundCurrent = true;
+      continue;
+    }
+    if (foundCurrent) {
+      const file = snap.files.find((f) => f.filePath === filePath);
+      if (file && file.backupFileName) {
+        return file.backupFileName;
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
  * Filter out files whose backup content is identical to the previous version
  * or to the current file on disk (meaning no real change happened).
  */
