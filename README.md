@@ -6,12 +6,17 @@ Review all file changes made by Claude Code sessions with diffs and one-click re
 
 ## Features
 
+- **Session overview** — See all Claude Code sessions for your workspace, sorted by most recent
 - **All Changes** — See every file Claude changed in a session with cumulative diffs (before vs current)
 - **Timeline** — Step-by-step checkpoint diffs showing what Claude changed at each point
 - **Diffs** — Click any file to view the diff. A/M/D icons show added, modified, or deleted files
 - **Revert** — Restore individual files, delete created files, or "Revert All" to undo an entire session
 - **Auto-refresh** — Panel updates automatically as Claude creates new checkpoints
 - **Cross-platform** — Works on Linux, macOS, and Windows
+
+## How It Works
+
+Claude Code automatically creates file backups (checkpoints) before editing files. This extension reads that checkpoint data and presents it in a visual panel so you can review what Claude changed and revert if needed.
 
 ## Usage
 
