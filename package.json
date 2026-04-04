@@ -2,9 +2,13 @@
   "name": "claude-changes",
   "displayName": "Claude Changes",
   "description": "Review all file changes made by Claude Code sessions with diffs and one-click revert",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "publisher": "FotisPanokis",
   "icon": "resources/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/panfotis/claude-changes"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
