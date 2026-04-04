@@ -208,18 +208,27 @@ async function parseSessionJsonl(
           slug = entry.slug;
         }
 
-        // Extract first user message text
+        // Extract first real user message text (skip IDE context tags)
         if (entry.type === "user" && !firstUserMessage && entry.message?.content) {
           const content = entry.message.content;
+          let candidate = "";
           if (typeof content === "string") {
-            firstUserMessage = content;
+            candidate = content;
           } else if (Array.isArray(content)) {
             for (const block of content) {
               if (block.type === "text" && block.text) {
-                firstUserMessage = block.text;
+                candidate = block.text;
                 break;
               }
             }
+          }
+          // Strip IDE context tags and check if real text remains
+          const cleaned = candidate
+            .replace(/<ide_[^>]*>[\s\S]*?<\/ide_[^>]*>/g, "")
+            .replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "")
+            .trim();
+          if (cleaned) {
+            firstUserMessage = cleaned;
           }
         }
 
