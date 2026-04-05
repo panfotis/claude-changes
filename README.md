@@ -18,6 +18,8 @@ Review all file changes made by Claude Code sessions with diffs and one-click re
 
 Claude Code automatically creates file backups (checkpoints) before editing files. This extension reads that checkpoint data and presents it in a visual panel so you can review what Claude changed and revert if needed.
 
+**Note:** This is a quick review tool, not a replacement for git. Always use git for full version control and reverting.
+
 ## Usage
 
 1. Open a project where you've used Claude Code
@@ -29,6 +31,12 @@ Claude Code automatically creates file backups (checkpoints) before editing file
 ## Requirements
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) must be installed and used at least once in your project
+
+## Known Limitations
+
+- Changes made via bash commands (`sed`, `rm`, etc.) are not tracked by Claude Code's checkpoint system
+- In rare cases, some edits may not appear if Claude Code doesn't create a new backup version
+- Reverting a file restores it to the checkpoint state, which may undo changes made after that checkpoint (by Claude or manually). Use git to recover if needed
 
 ## Disclaimer
 

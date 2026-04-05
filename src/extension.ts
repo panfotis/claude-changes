@@ -252,6 +252,7 @@ export function activate(context: vscode.ExtensionContext) {
           }
           fs.writeFileSync(absolutePath, content, "utf-8");
           webviewProvider.markFileReverted(sessionId, absolutePath);
+          webviewProvider.refresh();
           vscode.window.showInformationMessage(
             `Restored ${path.basename(absolutePath)} to checkpoint v${version}`
           );
@@ -293,6 +294,7 @@ export function activate(context: vscode.ExtensionContext) {
           if (sessionId) {
             webviewProvider.markFileReverted(sessionId, absolutePath);
           }
+          webviewProvider.refresh();
           const dir = path.dirname(absolutePath);
           const isEmpty = fs.readdirSync(dir).length === 0;
           const msg = isEmpty
@@ -389,6 +391,7 @@ export function activate(context: vscode.ExtensionContext) {
 
         if (revertedPaths.length > 0) {
           webviewProvider.markAllReverted(sessionId, revertedPaths);
+          webviewProvider.refresh();
         }
 
         const msgParts: string[] = [];
