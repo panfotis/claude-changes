@@ -1020,27 +1020,52 @@ export class CheckpointWebviewProvider implements vscode.WebviewViewProvider {
       }
     }
 
-    const backup = readBackupFile(session.sessionId, file.backupFileName);
-    if (backup === null) {
-      return true;
-    }
-
     if (nextBackup) {
+      const backup = readBackupFile(session.sessionId, file.backupFileName);
+      if (backup === null) {
+        return true;
+      }
       // Checkpoint mode: backup -> next backup
       const nextContent = readBackupFile(session.sessionId, nextBackup);
       return nextContent === null ? true : backup !== nextContent;
     }
 
-    // Last occurrence: backup -> current (or empty if missing)
+    // Last occurrence: this checkpoint's own backup already reflects the
+    // post-edit state (it's identical to the current file by construction),
+    // so diff against the PREVIOUS version's backup instead - that's what
+    // this checkpoint actually changed.
+    const prevBackupFileName = this._getPreviousBackupFileName(file);
+    const prevContent = prevBackupFileName
+      ? readBackupFile(session.sessionId, prevBackupFileName)
+      : null;
+    if (prevContent === null) {
+      return true;
+    }
     if (!fs.existsSync(file.absolutePath)) {
-      return backup !== "";
+      return prevContent !== "";
     }
     try {
       const current = fs.readFileSync(file.absolutePath, "utf-8");
-      return backup !== current;
+      return prevContent !== current;
     } catch {
       return true;
     }
+  }
+
+  /**
+   * Given a file's own backup (which reflects the post-edit state of its
+   * checkpoint), find the backup filename for the version right before it -
+   * i.e. the pre-edit state for that same checkpoint.
+   */
+  private _getPreviousBackupFileName(file: FileBackup): string | null {
+    if (!file.backupFileName || file.version === undefined || file.version <= 1) {
+      return null;
+    }
+    const match = file.backupFileName.match(/^(.+)@v\d+$/);
+    if (!match) {
+      return null;
+    }
+    return `${match[1]}@v${file.version - 1}`;
   }
 
   private _renderFileItem(
