@@ -20,6 +20,17 @@ function parseBackupVersion(backupFileName: string | null | undefined): number |
   return match ? parseInt(match[1], 10) : null;
 }
 
+function getPreviousBackupFileName(
+  backupFileName: string | null | undefined,
+  version: number
+): string | null {
+  if (!backupFileName || version <= 1) {
+    return null;
+  }
+  const match = backupFileName.match(/^(.+)@v\d+$/);
+  return match ? `${match[1]}@v${version - 1}` : null;
+}
+
 export function activate(context: vscode.ExtensionContext) {
   const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   log.appendLine(`Workspace path: ${workspacePath ?? "NONE"}`);
@@ -185,15 +196,39 @@ export function activate(context: vscode.ExtensionContext) {
         // Cumulative mode or last checkpoint: diff vs current file
         const currentUri = vscode.Uri.file(absolutePath);
 
+        if (mode === "checkpoint") {
+          // This checkpoint's own backup already reflects the post-edit state
+          // (identical to the current file by construction), so diff against
+          // the PREVIOUS version's backup instead - that's what this
+          // checkpoint actually changed.
+          const prevBackupFileName = getPreviousBackupFileName(backupFileName, version);
+          const beforeUri = prevBackupFileName
+            ? buildCheckpointUri(sessionId, prevBackupFileName, fileName)
+            : emptyUri;
+          if (fs.existsSync(absolutePath)) {
+            await vscode.commands.executeCommand(
+              "vscode.diff",
+              beforeUri,
+              currentUri,
+              `${fileName}: v${version} (${timeLabel}) \u2194 current (may include later edits)`
+            );
+          } else {
+            await vscode.commands.executeCommand(
+              "vscode.diff",
+              beforeUri,
+              emptyUri,
+              `${fileName}: checkpoint v${version} (${timeLabel}) \u2192 deleted`
+            );
+          }
+          return;
+        }
+
         if (fs.existsSync(absolutePath)) {
-          const label = mode === "checkpoint"
-            ? `${fileName}: v${version} (${timeLabel}) \u2194 current (may include later edits)`
-            : `${fileName}: checkpoint v${version} (${timeLabel}) \u2194 current`;
           await vscode.commands.executeCommand(
             "vscode.diff",
             checkpointUri,
             currentUri,
-            label
+            `${fileName}: checkpoint v${version} (${timeLabel}) \u2194 current`
           );
         } else {
           await vscode.commands.executeCommand(
